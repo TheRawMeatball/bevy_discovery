@@ -1,3 +1,55 @@
+//! # Bevy Discovery
+//! This crate adds `#[derive(DiscoveryPlugin)]` which will scan the project files for
+//! functions annotated with `#[system]` and register them automagically.
+//! Example:
+//! ```
+//! use bevy::prelude::*;
+//! 
+//! #[macro_use]
+//! extern crate bevy_discovery;
+//!
+//! fn main() {
+//!     App::build()
+//!         .add_plugin(DiscoveryPlugin)
+//!         .run();
+//! }
+//!
+//! #[system]
+//! fn discovered_system() {
+//!     println!("Woo, discovered system!");
+//! }
+//!
+//! #[system(stage::POST_UPDATE)]
+//! fn post_update_system() {
+//!     println!("Hey, post update system!");
+//! }
+//! #[derive(DiscoveryPlugin)]
+//! struct DiscoveryPlugin;
+//! ```
+//!
+//! ## Compile time performance
+//! 
+//! <table>
+//!     <tr>
+//!         <td></td>
+//!         <td>Full rebuild</td>
+//!         <td>Incremental</td>
+//!     </tr>
+//!     <tr>
+//!         <td>Normal</td>
+//!         <td>198.982 ± 1.167 s</td>
+//!         <td>25.944 ± 1.486 s</td>
+//!     </tr>
+//!     <tr>
+//!         <td>Discovered</td>
+//!         <td>207.636 ± 3.785 s</td>
+//!         <td>26.546 ± 1.782 s</td>
+//!     </tr>
+//! </table>
+//!
+//! These are the compile times for [my fork of bevy-robbo](https://github.com/TheRawMeatball/bevy-robbo),
+//! averaged over five runs with a discarded warmup round each using [hyperfine](https://github.com/sharkdp/hyperfine).
+
 use std::{
     fs::{File, OpenOptions},
     hash::{Hash, Hasher},
@@ -13,20 +65,9 @@ use rustc_hash::{FxHashMap, FxHasher};
 use serde::{Deserialize, Serialize};
 use syn::{parse_macro_input, Attribute, DeriveInput, Item, LitStr};
 
-#[derive(Default)]
-struct DiscoveryAttributes {
-    pub root: String,
-}
-
-fn take_attr_value(attrs: &[Attribute], key: &str) -> Option<String> {
-    attrs
-        .iter()
-        .find(|a| *a.path.get_ident().as_ref().unwrap() == key)?
-        .parse_args::<LitStr>()
-        .as_ref()
-        .map(LitStr::value)
-        .ok()
-}
+/// Use this macro to annotate systems that need to be registered.
+/// Optionally, you can pass a value that evaluates to &str to register
+/// the macro in a specific stage.
 #[proc_macro_attribute]
 pub fn system(
     _: proc_macro::TokenStream,
@@ -35,6 +76,9 @@ pub fn system(
     item
 }
 
+/// Annotating a struct with this will implement `Plugin` for it, registering all functions
+/// with the `#[system]` attribute accessible from the root file. By default, the root file is
+/// src/main.rs, but this can be overriden using `#[root(path/to/root.rs)]`
 #[proc_macro_derive(DiscoveryPlugin, attributes(root))]
 pub fn derive_discovery_plugin(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -260,6 +304,16 @@ fn search_contents(
         }
     }
     csr
+}
+
+fn take_attr_value(attrs: &[Attribute], key: &str) -> Option<String> {
+    attrs
+        .iter()
+        .find(|a| *a.path.get_ident().as_ref().unwrap() == key)?
+        .parse_args::<LitStr>()
+        .as_ref()
+        .map(LitStr::value)
+        .ok()
 }
 
 #[derive(Serialize, Deserialize)]
