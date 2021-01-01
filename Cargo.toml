@@ -5,6 +5,8 @@ authors = ["TheRawMeatball <therawmeatball@gmail.com>"]
 edition = "2018"
 license = "MIT"
 keywords = ["bevy"]
+repository = "https://github.com/TheRawMeatball/bevy_discovery"
+description = "Automatic system discovery and registration for Bevy apps"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
